@@ -1,21 +1,16 @@
-(function ($) {
-
-Drupal.behaviors.session_over = {
-  attach: function (context, settings) {
-    // Check every 60 seconds if the session is timed out
-    if (!$('body').hasClass('session-over')) {
-      $('body').addClass('session-over');
-      var intervalId = setInterval(function () {
-        $.getJSON(settings.session_over.checkUrl, function(data) {
-          if (!data.is_active) {
-            clearInterval(intervalId);
-            alert(settings.session_over.message);
-            document.location = settings.session_over.logoutUrl;
-          }
-        });
-      }, 60000);
-    }
-  }
+Drupal.behaviors.userbar = function(context) {
+  // Check each 60 seconds if the session is timed out
+  setTimeout("check_session_over()", 60000);
 };
 
-}) (jQuery);
+function check_session_over() {
+  $.getJSON(Drupal.settings.session_over.check_url, function(data) {
+    if (data.is_active) {
+      setTimeout("check_session_over()", 60000);
+    }
+    else {
+      alert(Drupal.t(Drupal.settings.session_over.message));
+      document.location = Drupal.settings.session_over.logout_url;
+    }
+  });
+}

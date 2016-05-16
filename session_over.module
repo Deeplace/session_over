@@ -1,35 +1,31 @@
 <?php
 
 /**
- * Implements hook_permission().
+ * Implements hook_perm()
  */
-function session_over_permission() {
-  return array(
-    'bypass session over' => array(
-      'title' => t('Bypass session timeout'),
-    ),
-  );
+function session_over_perm() {
+  return array('administer session over');
 }
 
 /**
- * Implements hook_menu().
+ * Implements hook_menu
  */
 function session_over_menu() {
   $items = array();
   
-  $items['admin/config/people/sessions'] = array(
-    'title'            => 'Session Timeout',
+  $items['admin/settings/sessions'] = array(
+    'title'            => 'Session Over settings',
     'description'      => 'Control how the site deals with sessions.',
     'page callback'    => 'drupal_get_form',
     'page arguments'   => array('session_over_settings_form'),
-    'access arguments' => array('administer site configuration'),
+    'access arguments' => array('administer session over'),
     'type'             => MENU_NORMAL_ITEM,
   );
   
   $items['check-session'] = array(
     'title'           => 'Check session',
-    'page callback'   => 'session_over_check_page',
-    'access callback' => 'user_is_logged_in',
+    'page callback'   => 'session_over_check_session',
+    'access callback' => TRUE,
     'type'            => MENU_CALLBACK,
   );
   
@@ -37,31 +33,31 @@ function session_over_menu() {
 }
 
 /**
- * Implements hook_boot().
+ * Implements hook_boot()
  */
 function session_over_boot() {
-  if (variable_get('session_over_destroy_on_close', FALSE)) {
-    ini_set('session.cookie_lifetime', 0);
+  if (variable_get('session_over_destroy_on_close', false)) {
+    ini_set('session.cookie_lifetime',  0);
   }
 }
 
 /**
- * Implementation of hook_init().
+ * Implementation of hook_init
  */
 function session_over_init() {
-  $pages = array('check-session', 'user/login', 'user/logout');
+  $pages = array('check-session', 'login', 'logout');
   
-  if (!in_array($_GET['q'], $pages)) {
+  if (!in_array(arg(0), $pages)) {
     if (session_over_is_timedout()) {
-      drupal_goto('user/logout');
+      drupal_goto('logout');
     }
     
     if (session_over_account_affected()) {
       $settings = array(
-        'timeout' => variable_get('session_over_timeout', 30 * 60),
+        'timeout' => variable_get('session_over_timeout', 1800),
         'message' => t("For your safety and protection your session has been timed out due to inactivity.\nYou must sign in again to resume using your account."),
-        'checkUrl' => url('check-session'),
-        'logoutUrl' => url('user/logout'),
+        'check_url' => url('check-session'),
+        'logout_url' => url('logout'),
       );
       
       drupal_add_js(array('session_over' => $settings), 'setting');
@@ -73,19 +69,10 @@ function session_over_init() {
 }
 
 /**
- * Implements hook_user_login().
+ * Implements hook_user()
  */
-function session_over_user_login(&$edit, $account) {
-  if (isset($_SESSION['last_access_time'])) {
-    unset($_SESSION['last_access_time']);
-  }
-}
-
-/**
- * Implements hook_user_login().
- */
-function session_over_user_logout($account) {
-  if (isset($_SESSION['last_access_time'])) {
+function session_over_user($op, &$edit, &$account, $category = NULL) {
+  if ($op == 'login' || $op == 'logout' && isset($_SESSION['last_access_time'])) {
     unset($_SESSION['last_access_time']);
   }
 }
@@ -96,55 +83,60 @@ function session_over_user_logout($account) {
 function session_over_settings_form() {
   $form['session_over_timeout'] = array(
     '#type' => 'textfield',
-    '#title' => t('Session times out in'),
+    '#title' => t('Session timeout'),
     '#description' => t('Specify the time-to-live for user session, in case of user inactivity'),
-    '#field_suffix' => 'seconds',
-    '#default_value' => variable_get('session_over_timeout', 30 * 60),
+    '#default_value' => variable_get('session_over_timeout', 60 * 30),
   );
   
   $form['session_over_destroy_on_close'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Destroy the session on browser closing'),
+    '#title' => t('Destroy session on browser close'),
     '#default_value' => variable_get('session_over_destroy_on_close', false),
   );
-  
+
+  $form['session_over_roles'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Affected roles'),
+    '#options' => user_roles(TRUE),
+    '#default_value' => variable_get('session_over_roles', array()),
+  );
+
   return system_settings_form($form);
 }
 
 /**
  * Checks if session was not timed out
  */
-function session_over_check_page() {
+function session_over_check_session() {
   $result = array(
     'is_active' => !session_over_is_timedout(),
-    'idle_time' => time() - $_SESSION['last_access_time'],
+    'aa' => time() - $_SESSION['last_access_time'],
   );
-  drupal_json_output($result);
+  return drupal_json($result);
 }
 
-/**
- * Check if user is affected by session timeout
- *
- * @param object $account
- * @return bool
- */
 function session_over_account_affected($account = NULL) {
   if (empty($account)) {
     global $user;
     $account = $user;
   }
   
-  return $account->uid && !user_access('bypass session over', $account);
+  // Check only for non-anonymous and non-superuser accounts
+  if ($account->uid > 1) {
+    $roles = array_filter(variable_get('session_over_roles', array()));
+    foreach ($roles as $rid) {
+      if (!empty($account->roles[$rid])) {
+        return TRUE;
+      }
+    }
+  }
+  
+  return FALSE;
 }
 
-/**
- * Check if current user's session is timed out
- *
- * @return bool
- */
 function session_over_is_timedout() {
   if (!empty($_SESSION['last_access_time']) && session_over_account_affected()) {
-    return ($_SESSION['last_access_time'] < (time() - variable_get('session_over_timeout', 30 * 60)));
+    return ($_SESSION['last_access_time'] < (time() - variable_get('session_over_timeout', 1800)));
   }
   
   return FALSE;

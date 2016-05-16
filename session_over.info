@@ -1,6 +1,5 @@
-name = Session Timeout
-description = End user session after a period of inactivity
-core = 7.x
-version = 7.x-2.0
-package = Deeplace
-
+name = "Session Timeout"
+description = "Over a user session in the of inactivity" 
+package = "Deeplace"
+core = "6.x"
+version = "6.x-2.0"
