@@ -1,0 +1,6 @@
+name = Session Timeout
+description = End user session after a period of inactivity
+core = 7.x
+version = 7.x-2.0
+package = Deeplace
+
