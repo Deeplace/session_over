@@ -117,7 +117,7 @@ function session_over_settings_form() {
 function session_over_check_page() {
   $result = array(
     'is_active' => !session_over_is_timedout(),
-    'idle_time' => time() - $_SESSION['last_access_time'],
+    'idle_time' => isset($_SESSION['last_access_time']) ? (time() - $_SESSION['last_access_time']) : 0,
   );
   drupal_json_output($result);
 }
